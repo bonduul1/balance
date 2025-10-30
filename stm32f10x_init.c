@@ -1,0 +1,1068 @@
+/*================ COPYRIGHT 2010 (주)기원전자 기술연구소  =========================
+
+        화  일  명 : STM32F10X_INIT.C
+   프로그래명 : 초기화 프로그램
+   작 성 자   : 박 강 호
+   도    구   :CORETEX-M3(STM32F103V16)
+
+ **********************************************************************************************/
+#define __STM32F10X_H__
+
+#include "stm32f10x_lib.h"
+#include "main.h"
+#include "adc.h"
+#include "CAN_APP.H"
+extern bool FP_POWER_ON;
+/* Private macro -------------------------------------------------------------*/
+/* Private variables ---------------------------------------------------------*/
+GPIO_InitTypeDef    GPIO_InitStructure;
+RCC_ClocksTypeDef   RCC_ClockFreq;
+NVIC_InitTypeDef    NVIC_InitStructure;
+USART_InitTypeDef   USART_InitStructure;
+ADC_InitTypeDef     ADC_InitStructure;
+DMA_InitTypeDef     DMA_InitStructure;
+
+static volatile ErrorStatus HSEStartUpStatus = SUCCESS;
+
+//u16   DMA_ADC_Value[10];     // AD컨터버 DMA 버퍼.
+I2C_InitTypeDef  I2C_InitStructure;
+
+
+/******************************************************************************************************/
+/* Internal_timer_Proc : 평상시 tmxfg는 항상 "1" 이다   (timer_setup 시 tmxg를 "0"으로 만든다)         */                                  
+/******************************************************************************************************/
+void Internal_timer_Proc() {            
+
+  if(tm1ms_f) { tm1ms_f =0;   // System Tick Flag every 1msec
+
+      if(!tm0fg) {   if(!--timer_buf[0]) tm0fg =1;   }      
+      if(!tm1fg) {   if(!--timer_buf[1]) tm1fg =1;   }
+      if(!tm2fg) {   if(!--timer_buf[2]) tm2fg =1;   }
+      if(!tm3fg) {   if(!--timer_buf[3]) tm3fg =1;   }
+      if(!tm4fg) {   if(!--timer_buf[4]) tm4fg =1;   }
+      if(!tm5fg) {   if(!--timer_buf[5]) tm5fg =1;   }
+      if(!tm6fg) {   if(!--timer_buf[6]) tm6fg =1;   }
+      if(!tm7fg) {   if(!--timer_buf[7]) tm7fg =1;   }
+  }
+}
+/******************************************************************************************************/
+/* timer_setup : 해당 tmxfg를 "0"으로 만든 후 원하는 timer 값을 처리한다.                    */                                  
+/******************************************************************************************************/
+void timer_setup(uchar tmno, ushort timer) {
+    clrbit(tm.slag, tmno);   timer_buf[tmno] =timer;
+}
+/******************************************************************************************************/
+/* timer base bit initial :                                                                    */                                                                  
+/******************************************************************************************************/
+void Gp_initial(void){
+    tm.slag =0xff;
+}
+/******************************************************************************************************/
+/* PLL_initial   :    Configures the system clocks.                        */                                    
+/******************************************************************************************************/
+void PLL_initial(void) {   //PLL configuration
+  /* SYSCLK, HCLK, PCLK2 and PCLK1 configuration -----------------------------*/
+  /* RCC system reset(for debug purpose) */
+  RCC_DeInit();
+
+  /* Enable HSE */
+  RCC_HSEConfig(RCC_HSE_ON);
+
+  /* Wait till HSE is ready */
+  while(RCC_GetFlagStatus(RCC_FLAG_HSERDY) == RESET)
+  {
+  }
+#if defined STM32F101_ENABLE
+// flash access wait time
+// 0 = Zero wait state, if 0 < SYSCLK≤ 24 MHz
+// 1 = One wait state,  if 24 MHz < SYSCLK ≤ 48 MHz
+// 2 = Two wait states, if 48 MHz < SYSCLK ≤ 72 MHz
+
+ /* Flash 1 wait state */
+  FLASH_SetLatency(FLASH_Latency_1);
+
+  /* HCLK = MAX SYSCLK = 36MHz/1 = 36MHz */
+  RCC_HCLKConfig(RCC_SYSCLK_Div1);
+
+  /* configure MAX PCLK2 = 36MHz/1 = 36MHz */
+  RCC_PCLK2Config(RCC_HCLK_Div1);
+
+  /* configure MAX PCLK1 = 36MHz/1 = 36MHz */
+  RCC_PCLK1Config(RCC_HCLK_Div1);
+
+  /* configure MAX PLLCLK = 8MHz/2 * 9 = 36MHz */
+  RCC_PLLConfig(RCC_PLLSource_HSE_Div2, RCC_PLLMul_9);
+
+#endif
+#if defined STM32F102_ENABLE
+
+ /* Flash 1 wait state */
+  FLASH_SetLatency(FLASH_Latency_1);
+
+  /* HCLK = MAX SYSCLK = 48MHz/1=48MHz */
+  RCC_HCLKConfig(RCC_SYSCLK_Div1);
+
+  /* configure MAX PCLK2 = 48MHz/1=48MHz */
+  RCC_PCLK2Config(RCC_HCLK_Div1);
+
+  /* configure MAX PCLK1 = 48MHz/2=24MHz */
+  RCC_PCLK1Config(RCC_HCLK_Div2);
+
+  /* configure MAX PLLCLK = 8MHz/1 * 6 =48MHz */
+  RCC_PLLConfig(RCC_PLLSource_HSE_Div1, RCC_PLLMul_6);
+
+#endif
+
+#if defined STM32F103_ENABLE      //사용 Enable 되어 있음..
+
+ /* Flash 2 wait state */
+  FLASH_SetLatency(FLASH_Latency_2);
+
+  /* HCLK = MAX SYSCLK = 72MHz/1=72MHz*/
+  RCC_HCLKConfig(RCC_SYSCLK_Div1);
+
+  /* configure MAX PCLK2 = 72MHz/1=72MHz */
+  RCC_PCLK2Config(RCC_HCLK_Div1);
+
+  /* configure MAX PCLK1 = 72MHz/2=36MHz */
+  RCC_PCLK1Config(RCC_HCLK_Div2);
+
+  /* configure MAX PLLCLK = 8MHz/1 * 9= 72MHz */
+  RCC_PLLConfig(RCC_PLLSource_HSE_Div1, RCC_PLLMul_9);
+
+  RCC_ADCCLKConfig(RCC_PCLK2_Div6);    // 주의 : APB2 가 72MHz공급시 ADC 최대가 14MHz넘지 않도록 설정 72/6으로 divide
+
+#endif
+
+  /* Enable PLL */
+  RCC_PLLCmd(ENABLE);
+
+  /* Wait till PLL is ready */
+  while(RCC_GetFlagStatus(RCC_FLAG_PLLRDY) == RESET)
+  {
+  }
+
+  /* Select PLL as system clock source */
+  RCC_SYSCLKConfig(RCC_SYSCLKSource_PLLCLK);
+
+  /* Wait till PLL is used as system clock source */
+  while(RCC_GetSYSCLKSource() != 0x08)
+  {
+  }
+
+  /* Enable Prefetch Buffer */
+  FLASH_PrefetchBufferCmd(FLASH_PrefetchBuffer_Enable);
+
+  /* This function fills a RCC_ClocksTypeDef structure with the current
+     frequencies of different on chip clocks (for debug purpose) */
+  RCC_GetClocksFreq(&RCC_ClockFreq);
+
+  /* Enable Clock Security System(CSS) */
+  RCC_ClockSecuritySystemCmd(ENABLE);
+
+}
+/******************************************************************************************************/
+/* NVIC_initial   :   vector configuration                                        */                                    
+/******************************************************************************************************/
+void NVIC_initial(void){
+
+#ifdef  VECT_TAB_RAM
+  /* Set the Vector Table base location at 0x20000000 */
+  NVIC_SetVectorTable(NVIC_VectTab_RAM, 0x0);
+#else  /* VECT_TAB_FLASH  */
+  /* Set the Vector Table base location at 0x08000000 */
+  NVIC_SetVectorTable(NVIC_VectTab_FLASH, 0x0);
+#endif
+
+  /* Enable and configure RCC global IRQ channel */
+  NVIC_InitStructure.NVIC_IRQChannel = RCC_IRQChannel;
+  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 6;
+  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
+  NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+  NVIC_Init(&NVIC_InitStructure);
+/*
+//
+// 외부 인터럽트 설정루틴..
+//
+   NVIC_PriorityGroupConfig(NVIC_PriorityGroup_2);
+
+   NVIC_InitStructure.NVIC_IRQChannel = EXTI15_10_IRQChannel;
+   NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
+   NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+   NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+   NVIC_Init(&NVIC_InitStructure);*/
+}
+/******************************************************************************************************/
+/* SYSTICK_initial   :   SYSTICK_ configuration                        */                                    
+/******************************************************************************************************/
+void SYSTICK_initial(void) {    
+
+RCC_ClocksTypeDef  rcc_clocks;
+// char Test[50];
+  /* SysTick end of count event each 1ms with input clock equal to 9MHz (HCLK/8, default) */
+  RCC_GetClocksFreq(&rcc_clocks);
+  
+//SysTick_SetReload(rcc_clocks.SYSCLK_Frequency/1000);    // 1.00mSec  Boot loader using 
+  SysTick_SetReload(rcc_clocks.SYSCLK_Frequency/10000);    // 1.00mSec   Boot loader Not using 
+
+  /* Configure the SysTick Handler Priority: Preemption priority and subpriority */
+  NVIC_SystemHandlerPriorityConfig(SystemHandler_SysTick, 0, 0);
+
+   /* Enable SysTick interrupt */
+  SysTick_ITConfig(ENABLE);
+
+  /* Enable the SysTick Counter */
+  SysTick_CounterCmd(SysTick_Counter_Enable);
+
+}
+/******************************************************************************************************/
+/* GPIO_port_initial   :                                      */                                    
+/******************************************************************************************************/
+void GPIO_port_initial(void)
+{
+    /* Enable GPIOA clock */
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA | RCC_APB2Periph_AFIO, ENABLE);
+    /* Enable GPIOB clock */
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE);
+    /* Enable GPIOC clock */
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC | RCC_APB2Periph_AFIO, ENABLE);
+    
+    // Configure PA 4,5,6,7 INPUT
+    GPIO_InitStructure.GPIO_Pin =   GPIO_Pin_0 ;
+    GPIO_InitStructure.GPIO_Mode =  GPIO_Mode_IPU;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+    // Configure PA 8 Output..
+    GPIO_InitStructure.GPIO_Pin =   GPIO_Pin_6 | GPIO_Pin_7 | GPIO_Pin_8;
+    GPIO_InitStructure.GPIO_Mode =  GPIO_Mode_Out_PP;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOA, &GPIO_InitStructure);
+ 
+
+
+    // Configure PB 0 INPUT
+/*
+    GPIO_InitStructure.GPIO_Pin =   GPIO_Pin_5 | GPIO_Pin_6 | GPIO_Pin_7 | GPIO_Pin_8 | GPIO_Pin_9;
+    GPIO_InitStructure.GPIO_Mode =  GPIO_Mode_IPU;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOB, &GPIO_InitStructure);
+*/
+    GPIOB->ODR |= BIT_5;  // EEPROM WR HIGH
+    
+    GPIO_InitStructure.GPIO_Pin =   GPIO_Pin_11;
+    GPIO_InitStructure.GPIO_Mode =  GPIO_Mode_IPU;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOB, &GPIO_InitStructure);                              // add 20251030
+    
+    // Configure PB 11,12,13,15 OUTPUT
+    GPIO_InitStructure.GPIO_Pin =   GPIO_Pin_5 | GPIO_Pin_10  | GPIO_Pin_12 | GPIO_Pin_13 | GPIO_Pin_14 | GPIO_Pin_15; // 20251030 GPIO_Pin_11
+    GPIO_InitStructure.GPIO_Mode =  GPIO_Mode_Out_PP;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOB, &GPIO_InitStructure);
+
+
+    // Configure PC 4 INPUT
+    GPIO_InitStructure.GPIO_Pin =   GPIO_Pin_1 | GPIO_Pin_2 | GPIO_Pin_3 | GPIO_Pin_13 | GPIO_Pin_14 | GPIO_Pin_15;
+    GPIO_InitStructure.GPIO_Mode =  GPIO_Mode_IPU;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOC, &GPIO_InitStructure);
+
+    // Configure PC 2 OUTPUT
+    GPIO_InitStructure.GPIO_Pin =   GPIO_Pin_11 | GPIO_Pin_12;
+    GPIO_InitStructure.GPIO_Mode =  GPIO_Mode_Out_PP;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOC, &GPIO_InitStructure);
+
+    // Configure PC 0,6,7,8,9  OUTPUT
+    GPIO_InitStructure.GPIO_Pin =   GPIO_Pin_6 | GPIO_Pin_7;
+    GPIO_InitStructure.GPIO_Mode =  GPIO_Mode_Out_PP;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOC, &GPIO_InitStructure);
+
+    /* Enable GPIOD clock */
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD | RCC_APB2Periph_AFIO, ENABLE);
+    // Configure  PD 2 
+    GPIO_InitStructure.GPIO_Pin =  GPIO_Pin_2;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOD, &GPIO_InitStructure);
+
+    FP_POWER_ON = FALSE;
+    OUT_PUT();        // 출력 처리 루틴..
+}
+/******************************************************************************************************/
+/* UART1_initial   :                                      */                                    
+/******************************************************************************************************/
+void UART1_initial(void){
+
+  /* Enable GPIOA and USART1 clocks */
+  RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA | RCC_APB2Periph_USART1, ENABLE);
+
+  /* Configure USART1 Tx (PA9) as alternate function push-pull */
+  GPIO_InitStructure.GPIO_Pin = GPIO_Pin_9;
+  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
+  GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+  /* Configure USART1 Rx (PA10) as input floating */
+  GPIO_InitStructure.GPIO_Pin = GPIO_Pin_10;
+  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+  GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+/* USART1 configuration ------------------------------------------------------*/
+  /* USART1 configured as follow:
+        - BaudRate = 115200 baud
+        - Word Length = 8 Bits
+        - one Stop Bit
+        - No parity
+        - Hardware flow control disabled (RTS and CTS signals)
+        - Receive and transmit enabled
+        - USART Clock disabled
+        - USART CPOL: Clock is active low
+        - USART CPHA: Data is captured on the second edge
+        - USART LastBit: The clock pulse of the last data bit is not output to
+                         the SCLK pin
+  */
+  USART_InitStructure.USART_BaudRate = 115200;
+  USART_InitStructure.USART_WordLength = USART_WordLength_8b;
+  USART_InitStructure.USART_StopBits = USART_StopBits_1;
+  USART_InitStructure.USART_Parity = USART_Parity_No;
+  USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
+  USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;
+//  USART_InitStructure.USART_Clock = USART_Clock_Disable;
+//  USART_InitStructure.USART_CPOL = USART_CPOL_Low;
+//  USART_InitStructure.USART_CPHA = USART_CPHA_2Edge;
+//  USART_InitStructure.USART_LastBit = USART_LastBit_Disable;
+
+  /* Configure the USART1 */
+  USART_Init(USART1, &USART_InitStructure);
+
+
+// rx line -- > interrupt(interrupt check)
+// tx line -- > polling(flag check)
+
+/* Enable the USART Transmoit interrupt: this interrupt is generated when the
+   USART1 transmit data register is empty */
+//  USART_ITConfig(USART1, USART_IT_TXE, ENABLE);
+
+/* Enable the USART Receive interrupt: this interrupt is generated when the
+   USART1 receive data register is not empty */
+  USART_ITConfig(USART1, USART_IT_RXNE, ENABLE);
+
+  /* Enable USART1 */
+  USART_Cmd(USART1, ENABLE);
+
+  /* Enable the USART1 Interrupt */
+  NVIC_InitStructure.NVIC_IRQChannel = USART1_IRQChannel;
+  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 1;
+  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+  NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+  NVIC_Init(&NVIC_InitStructure);
+
+}
+/******************************************************************************************************/
+/* UART2_initial   :                                      */                                    
+/******************************************************************************************************/
+
+void UART2_initial(void)
+{
+  /* Enable the USART3 Pins Partial Software Remapping */
+  GPIO_PinRemapConfig(GPIO_Remap_USART2, ENABLE);
+  /* Enable GPIOA and USART1 clocks */
+  RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD, ENABLE);
+   /* Enable USART3 clocks */
+  RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART2, ENABLE);
+
+  /* Configure USART2 Tx (PD5) as alternate function push-pull */
+  GPIO_InitStructure.GPIO_Pin = GPIO_Pin_5;
+  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
+  GPIO_Init(GPIOD, &GPIO_InitStructure);
+
+  /* Configure USART3 Rx (PD6) as input floating */
+  GPIO_InitStructure.GPIO_Pin = GPIO_Pin_6;
+  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+  GPIO_Init(GPIOD, &GPIO_InitStructure);
+
+
+/* USART2 configuration ------------------------------------------------------*/
+  /* USART1 configured as follow:
+        - BaudRate = 4800 baud
+        - Word Length = 8 Bits
+        - one Stop Bit
+        - No parity
+        - Hardware flow control disabled (RTS and CTS signals)
+        - Receive and transmit enabled
+        - USART Clock disabled
+        - USART CPOL: Clock is active low
+        - USART CPHA: Data is captured on the second edge
+        - USART LastBit: The clock pulse of the last data bit is not output to
+                         the SCLK pin
+  */
+  USART_InitStructure.USART_BaudRate = 4800;
+  USART_InitStructure.USART_WordLength = USART_WordLength_8b;
+  USART_InitStructure.USART_StopBits = USART_StopBits_1;
+  USART_InitStructure.USART_Parity = USART_Parity_No;
+  USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
+  USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;
+//  USART_InitStructure.USART_Clock = USART_Clock_Disable;
+//  USART_InitStructure.USART_CPOL = USART_CPOL_Low;
+//  USART_InitStructure.USART_CPHA = USART_CPHA_2Edge;
+//  USART_InitStructure.USART_LastBit = USART_LastBit_Disable;
+
+  /* Configure the USART1 */
+  USART_Init(USART2, &USART_InitStructure);
+
+
+// rx line -- > interrupt(interrupt check)
+// tx line -- > polling(flag check)
+
+/* Enable the USART Transmoit interrupt: this interrupt is generated when the
+   USART1 transmit data register is empty */
+//  USART_ITConfig(USART2, USART_IT_TXE, ENABLE);
+
+/* Enable the USART Receive interrupt: this interrupt is generated when the
+   USART1 receive data register is not empty */
+  USART_ITConfig(USART2, USART_IT_RXNE, ENABLE);
+
+  /* Enable USART2 */
+  USART_Cmd(USART2, ENABLE);
+
+  /* Enable the USART2 Interrupt */
+  NVIC_InitStructure.NVIC_IRQChannel = USART2_IRQChannel;
+  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 4;
+  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+  NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+  NVIC_Init(&NVIC_InitStructure);
+
+}
+
+/******************************************************************************************************/
+/* UART3_initial   :                                      */                                    
+/******************************************************************************************************/
+void UART3_initial(void){
+
+  /* Enable the USART3 Pins Partial Software Remapping */
+  GPIO_PinRemapConfig(GPIO_PartialRemap_USART3, ENABLE);
+
+  /* Enable GPIOA and USART1 clocks */
+  RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOC, ENABLE);
+   /* Enable USART3 clocks */
+  RCC_APB1PeriphClockCmd(RCC_APB1Periph_USART3, ENABLE);
+
+  /* Configure USART3 Tx (PC10) as alternate function push-pull */
+  GPIO_InitStructure.GPIO_Pin = GPIO_Pin_10;
+  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
+  GPIO_Init(GPIOC, &GPIO_InitStructure);
+
+  /* Configure USART3 Rx (PC11) as input floating */
+  GPIO_InitStructure.GPIO_Pin = GPIO_Pin_11;
+  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+  GPIO_Init(GPIOC, &GPIO_InitStructure);
+
+/* USART1 configuration ------------------------------------------------------*/
+  /* USART1 configured as follow:
+        - BaudRate = 115200 baud
+        - Word Length = 8 Bits
+        - one Stop Bit
+        - No parity
+        - Hardware flow control disabled (RTS and CTS signals)
+        - Receive and transmit enabled
+        - USART Clock disabled
+        - USART CPOL: Clock is active low
+        - USART CPHA: Data is captured on the second edge
+        - USART LastBit: The clock pulse of the last data bit is not output to
+                         the SCLK pin
+  */
+  USART_InitStructure.USART_BaudRate = 4800;
+  USART_InitStructure.USART_WordLength = USART_WordLength_8b;
+  USART_InitStructure.USART_StopBits = USART_StopBits_1;
+  USART_InitStructure.USART_Parity = USART_Parity_No;
+  USART_InitStructure.USART_HardwareFlowControl = USART_HardwareFlowControl_None;
+  USART_InitStructure.USART_Mode = USART_Mode_Rx | USART_Mode_Tx;
+
+  /* Configure the USART3 */
+  USART_Init(USART3, &USART_InitStructure);
+
+// rx line -- > interrupt(interrupt check)
+// tx line -- > polling(flag check)
+
+/* Enable the USART Transmoit interrupt: this interrupt is generated when the
+   USART1 transmit data register is empty */
+//  USART_ITConfig(USART1, USART_IT_TXE, ENABLE);
+
+/* Enable the USART Receive interrupt: this interrupt is generated when the
+   USART1 receive data register is not empty */
+  USART_ITConfig(USART3, USART_IT_RXNE, ENABLE);
+
+  /* Enable USART3 */
+  USART_Cmd(USART3, ENABLE);
+
+  /* Enable the USART3 Interrupt */
+  NVIC_InitStructure.NVIC_IRQChannel = USART3_IRQChannel;
+  NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 5;
+  NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+  NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+  NVIC_Init(&NVIC_InitStructure);
+
+}
+
+/******************************************************************************************************/
+/* ADC1_ initial   :      channel 14 (PC.04)                             */                                    
+/******************************************************************************************************/
+
+void ADC1_Configuration(void)
+{
+   ADC_InitTypeDef ADC_InitStructure;
+
+  /* Enable ADC1 */
+   RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC1, ENABLE);
+
+
+    ADC_InitStructure.ADC_Mode = ADC_Mode_Independent;
+    ADC_InitStructure.ADC_ScanConvMode = DISABLE;
+    ADC_InitStructure.ADC_ContinuousConvMode = ENABLE;
+    ADC_InitStructure.ADC_ExternalTrigConv = ADC_ExternalTrigConv_None;
+    ADC_InitStructure.ADC_DataAlign = ADC_DataAlign_Right;
+    ADC_InitStructure.ADC_NbrOfChannel = 1;
+    ADC_Init(ADC1, &ADC_InitStructure);
+
+    /* ADC1 regular channel16 configuration */
+    ADC_RegularChannelConfig(ADC1, ADC_Channel_16, 1, ADC_SampleTime_239Cycles5);
+
+    /* Enable ADC1 DMA */
+    ADC_DMACmd(ADC1, ENABLE);
+
+    /* Enable ADC1 */
+    ADC_Cmd(ADC1, ENABLE);
+
+    /* Enable ADC1 reset calibaration register */
+    ADC_ResetCalibration(ADC1);
+    /* Check the end of ADC1 reset calibration register */
+    while(ADC_GetResetCalibrationStatus(ADC1));
+
+    /* Start ADC1 calibaration */
+    ADC_StartCalibration(ADC1);
+    /* Check the end of ADC1 calibration */
+    while(ADC_GetCalibrationStatus(ADC1));
+
+    ADC_TempSensorVrefintCmd(ENABLE);    // 온도 센서 on..위치 주의...
+
+  /* Start ADC1 Software Conversion */
+//  ADC_SoftwareStartConvCmd(ADC1, ENABLE);
+
+
+}
+
+/******************************************************************************************************/
+/* ADC2_ initial   :                                   */                                    
+/******************************************************************************************************/
+
+void ADC2_Configuration(void)
+{
+   ADC_InitTypeDef ADC_InitStructure;
+
+  /* Enable ADC2 */
+  RCC_APB2PeriphClockCmd(RCC_APB2Periph_ADC2, ENABLE);
+
+  /* Configure PA 0  as analog input(ADC Channel 1,2,3 --*/
+  GPIO_InitStructure.GPIO_Pin =  GPIO_Pin_1 | GPIO_Pin_2 | GPIO_Pin_3 | GPIO_Pin_4 | GPIO_Pin_5;
+  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
+  GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+
+  /* Configure PC 1,2,3 as analog input(ADC Channel 1,2,3 --*/
+  GPIO_InitStructure.GPIO_Pin =  GPIO_Pin_4;
+  GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AIN;
+  GPIO_Init(GPIOC, &GPIO_InitStructure);
+
+
+   ADC_InitStructure.ADC_Mode               = ADC_Mode_Independent;
+   ADC_InitStructure.ADC_ScanConvMode       = DISABLE;              // DMA 모드에선 ENABLE
+   ADC_InitStructure.ADC_ContinuousConvMode = DISABLE;              // DMA 모드에선 ENABLE
+   ADC_InitStructure.ADC_ExternalTrigConv   = ADC_ExternalTrigConv_None;
+   ADC_InitStructure.ADC_DataAlign          = ADC_DataAlign_Right;
+   ADC_InitStructure.ADC_NbrOfChannel       = 6;
+   ADC_Init(ADC2, &ADC_InitStructure);
+
+   ADC_RegularChannelConfig(ADC2, ADC_Channel_1,  1, ADC_SampleTime_13Cycles5);
+   ADC_RegularChannelConfig(ADC2, ADC_Channel_2,  2, ADC_SampleTime_13Cycles5);
+   ADC_RegularChannelConfig(ADC2, ADC_Channel_3,  3, ADC_SampleTime_13Cycles5);
+   
+   ADC_RegularChannelConfig(ADC2, ADC_Channel_4,  4, ADC_SampleTime_13Cycles5);
+   ADC_RegularChannelConfig(ADC2, ADC_Channel_5,  5, ADC_SampleTime_13Cycles5);
+   ADC_RegularChannelConfig(ADC2, ADC_Channel_14, 6, ADC_SampleTime_13Cycles5);
+
+// ADC_DMACmd(ADC2, ENABLE);  // DMA 모드에선 ENABLE
+   ADC_Cmd(ADC2, ENABLE);
+
+  /* Enable ADC2 reset calibaration register */
+   ADC_ResetCalibration(ADC2);
+  /* Check the end of ADC2 calibration */
+   while(ADC_GetResetCalibrationStatus(ADC2));
+   /* Start ADC2 calibaration */
+   ADC_StartCalibration(ADC2);
+  /* Check the end of ADC1 calibration */
+   while(ADC_GetCalibrationStatus(ADC2));
+
+}
+//=======================================================================
+// DMA Configuration...
+//=======================================================================
+
+void DMA_Configuration(void)
+{
+   DMA_InitTypeDef DMA_InitStructure;
+
+ /* Enable peripheral clocks --------------------------------------------------*/
+   RCC_AHBPeriphClockCmd(RCC_AHBPeriph_DMA1, ENABLE);
+
+ /* DMA1 channel1 configuration */
+    DMA_DeInit(DMA1_Channel1);
+    DMA_InitStructure.DMA_PeripheralBaseAddr = ADC1_DR_Address;
+    DMA_InitStructure.DMA_MemoryBaseAddr = (u32)&ADC_TEMP;
+    DMA_InitStructure.DMA_DIR = DMA_DIR_PeripheralSRC;
+    DMA_InitStructure.DMA_BufferSize = 1;
+    DMA_InitStructure.DMA_PeripheralInc = DMA_PeripheralInc_Disable;
+    DMA_InitStructure.DMA_MemoryInc = DMA_MemoryInc_Disable;
+    DMA_InitStructure.DMA_PeripheralDataSize = DMA_PeripheralDataSize_HalfWord;
+    DMA_InitStructure.DMA_MemoryDataSize = DMA_MemoryDataSize_HalfWord;
+    DMA_InitStructure.DMA_Mode = DMA_Mode_Circular;
+    DMA_InitStructure.DMA_Priority = DMA_Priority_High;
+    DMA_InitStructure.DMA_M2M = DMA_M2M_Disable;
+    DMA_Init(DMA1_Channel1, &DMA_InitStructure);
+
+    /* Enable DMA1 Channel1 */
+    DMA_Cmd(DMA1_Channel1, ENABLE);
+ }
+
+//=======================================================================
+//
+//=======================================================================
+
+CAN_InitTypeDef        CAN_InitStructure;
+CAN_FilterInitTypeDef  CAN_FilterInitStructure;
+
+//#define CAN0_REMAP   1
+void CAN0_Init(void) {
+   u32 ID;
+  //CAN Periph clock enable 주의 : CPU STM32F103RBT6 ***일 경우... ***
+      RCC_APB1PeriphClockCmd(RCC_APB1Periph_CAN, ENABLE);
+      RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOA,ENABLE);
+      
+      // Configure CAN pin: RX
+      GPIO_InitStructure.GPIO_Pin = GPIO_Pin_11;
+      GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;
+      GPIO_Init(GPIOA, &GPIO_InitStructure);
+      
+      // Configure CAN pin: TX
+      GPIO_InitStructure.GPIO_Pin = GPIO_Pin_12;
+      GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
+      GPIO_Init(GPIOA, &GPIO_InitStructure);
+/*
+   #else
+
+      //CAN Periph clock enable
+      RCC_APB1PeriphClockCmd(RCC_APB1Periph_CAN, ENABLE);
+      RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOD, ENABLE);
+   
+      //Default CANRX=PA11, CANTX=PA12
+      //GPIO_PinRemapConfig(GPIO_Remap1_CAN,ENABLE);//PB8,PB9
+      GPIO_PinRemapConfig(GPIO_Remap2_CAN,ENABLE);//PD0,PD1
+      
+      
+      // Configure CAN pin: RX
+      GPIO_InitStructure.GPIO_Pin = GPIO_Pin_0;
+      GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+      GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IPU;
+      //GPIO_InitStructure.GPIO_Mode = GPIO_Mode_IN_FLOATING;
+      GPIO_Init(GPIOD, &GPIO_InitStructure);
+      
+      // Configure CAN pin: TX
+      GPIO_InitStructure.GPIO_Pin = GPIO_Pin_1;
+      GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+      GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
+      //GPIO_InitStructure.GPIO_Mode = GPIO_Mode_Out_PP;
+      GPIO_Init(GPIOD, &GPIO_InitStructure);
+
+   //GPIO_SetBits(GPIOD,GPIO_Pin_1);
+      //AFIO->MAPR|=GPIO_Remap2_CAN;
+//   #endif   
+                */
+// CAN register init
+  CAN_DeInit();
+  CAN_StructInit(&CAN_InitStructure);
+   
+  CAN_InitStructure.CAN_TTCM=DISABLE;
+  CAN_InitStructure.CAN_ABOM=DISABLE;
+  CAN_InitStructure.CAN_AWUM=DISABLE;
+  CAN_InitStructure.CAN_NART=ENABLE;
+  CAN_InitStructure.CAN_RFLM=DISABLE;
+  CAN_InitStructure.CAN_TXFP=DISABLE;
+  CAN_InitStructure.CAN_Mode=CAN_Mode_Normal;//CAN_Mode_LoopBack;
+
+/*CAN_InitStructure.CAN_SJW=CAN_SJW_1tq;
+  CAN_InitStructure.CAN_BS1=CAN_BS1_12tq;
+  CAN_InitStructure.CAN_BS2=CAN_BS2_7tq;
+  CAN_InitStructure.CAN_Prescaler=18; //100K
+  CAN_Init(&CAN_InitStructure); */
+
+/*  CAN_InitStructure.CAN_SJW=CAN_SJW_1tq;
+  CAN_InitStructure.CAN_BS1=CAN_BS1_12tq;
+  CAN_InitStructure.CAN_BS2=CAN_BS2_7tq;
+  CAN_InitStructure.CAN_Prescaler=9; //200K
+  CAN_Init(&CAN_InitStructure); */
+
+
+  CAN_InitStructure.CAN_SJW=CAN_SJW_2tq;
+  CAN_InitStructure.CAN_BS1=CAN_BS1_7tq;
+  CAN_InitStructure.CAN_BS2=CAN_BS2_8tq;
+  CAN_InitStructure.CAN_Prescaler=9; //250K
+  CAN_Init(&CAN_InitStructure);
+
+   
+/*CAN_InitStructure.CAN_SJW=CAN_SJW_1tq;
+  CAN_InitStructure.CAN_BS1=CAN_BS1_4tq;
+  CAN_InitStructure.CAN_BS2=CAN_BS2_4tq;
+  CAN_InitStructure.CAN_Prescaler=8; //500K
+  CAN_Init(&CAN_InitStructure);  
+*/
+
+  // CAN filter init 1
+  //
+   CAN_FilterInitStructure.CAN_FilterNumber=1;
+   CAN_FilterInitStructure.CAN_FilterMode=CAN_FilterMode_IdList;
+   CAN_FilterInitStructure.CAN_FilterScale=CAN_FilterScale_32bit;
+   
+   ID = (u32)(VAC_CAN_UPGRADE_ID << 3);
+   CAN_FilterInitStructure.CAN_FilterIdHigh=(u16)(ID>>16);
+   CAN_FilterInitStructure.CAN_FilterIdLow= (u16)(ID&0xffff) |(0x1<<2);
+   
+   ID = (u32)( 0X19FFB000 << 3);
+   CAN_FilterInitStructure.CAN_FilterMaskIdHigh=(u16)(ID>>16);
+   CAN_FilterInitStructure.CAN_FilterMaskIdLow=(u16)(ID&0xffff) |(0x1<<2);
+        
+   CAN_FilterInitStructure.CAN_FilterFIFOAssignment=CAN_FIFO0;
+   CAN_FilterInitStructure.CAN_FilterActivation=ENABLE;
+   CAN_FilterInit(&CAN_FilterInitStructure);
+        
+//
+//   CAN Filter init 2
+//   
+   CAN_FilterInitStructure.CAN_FilterNumber=2;
+   CAN_FilterInitStructure.CAN_FilterMode=CAN_FilterMode_IdList;
+   CAN_FilterInitStructure.CAN_FilterScale=CAN_FilterScale_32bit;
+  
+   ID = (u32)(0x10FF5301 << 3);
+   CAN_FilterInitStructure.CAN_FilterIdHigh=(u16)(ID>>16);
+   CAN_FilterInitStructure.CAN_FilterIdLow= (u16)(ID&0xffff) |(0x1<<2);
+   
+   ID = (u32)(0x10FF5400 << 3);                                         // 2019.04.18. 추가.
+   CAN_FilterInitStructure.CAN_FilterMaskIdHigh=(u16)(ID>>16);
+   CAN_FilterInitStructure.CAN_FilterMaskIdLow=(u16)(ID&0xffff) |(0x1<<2);
+        
+   CAN_FilterInitStructure.CAN_FilterFIFOAssignment=CAN_FIFO0;
+   CAN_FilterInitStructure.CAN_FilterActivation=ENABLE;
+   CAN_FilterInit(&CAN_FilterInitStructure);
+  
+//
+//   CAN Filter init 3
+//   
+   CAN_FilterInitStructure.CAN_FilterNumber=3;
+   CAN_FilterInitStructure.CAN_FilterMode=CAN_FilterMode_IdList;
+   CAN_FilterInitStructure.CAN_FilterScale=CAN_FilterScale_32bit;
+  
+   ID = (u32)(0x19FFA100 << 3);
+   CAN_FilterInitStructure.CAN_FilterIdHigh=(u16)(ID>>16);
+   CAN_FilterInitStructure.CAN_FilterIdLow= (u16)(ID&0xffff) |(0x1<<2);
+   
+   ID = (u32)(0X19FFA050 << 3);                                         // 2019.04.18. 추가.
+   CAN_FilterInitStructure.CAN_FilterMaskIdHigh=(u16)(ID>>16);
+   CAN_FilterInitStructure.CAN_FilterMaskIdLow=(u16)(ID&0xffff) |(0x1<<2);
+        
+   CAN_FilterInitStructure.CAN_FilterFIFOAssignment=CAN_FIFO0;
+   CAN_FilterInitStructure.CAN_FilterActivation=ENABLE;
+   CAN_FilterInit(&CAN_FilterInitStructure);
+   
+   //enabling interrupt
+   NVIC_InitStructure.NVIC_IRQChannel=USB_LP_CAN_RX0_IRQChannel;
+   NVIC_InitStructure.NVIC_IRQChannelPreemptionPriority = 0;
+   NVIC_InitStructure.NVIC_IRQChannelSubPriority = 0;
+   NVIC_InitStructure.NVIC_IRQChannelCmd = ENABLE;
+   NVIC_Init(&NVIC_InitStructure);
+   
+ //CAN FIFO0 message pending interrupt enable
+   CAN_ITConfig(CAN_IT_FMP0, ENABLE);
+
+}
+
+/******************************************************************************************************/
+/* TIMER 1 PWM */
+/******************************************************************************************************/
+
+
+/******************************************************************************************************/
+/* TIMER 3 PWM */
+/******************************************************************************************************/
+
+//----------------------------------------------------
+void TIM3_Configuration(void)
+{
+   TIM_TimeBaseInitTypeDef  TIM_TimeBaseStructure;
+   TIM_OCInitTypeDef        TIM_OCInitStructure;
+// GPIO_InitTypeDef         GPIO_InitStructure;
+
+// GPIO_PinRemapConfig(GPIO_FullRemap_TIM3,ENABLE);   // PC6
+
+    // Configure  PA 6 , 7  
+    GPIO_InitStructure.GPIO_Pin =  GPIO_Pin_6 | GPIO_Pin_7;
+    GPIO_InitStructure.GPIO_Mode = GPIO_Mode_AF_PP;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOA, &GPIO_InitStructure);
+
+   RCC_APB1PeriphClockCmd(RCC_APB1Periph_TIM3, ENABLE); //TIM3 clock enable
+   memset(&TIM_TimeBaseStructure, 0x00, sizeof(TIM_TimeBaseInitTypeDef));
+   TIM_TimeBaseStructure.TIM_Period    = 1000;
+   TIM_TimeBaseStructure.TIM_Prescaler =  35;   // 200Hz=326,  500Hz= 144, 1KHz = 71, 2KHz = 35
+// TIM_TimeBaseStructure.TIM_Prescaler =  144;  // 200Hz=326,  500Hz= 144, 1KHz = 71 
+// TIM_TimeBaseStructure.TIM_Prescaler =  326;  // 200Hz=326, 500Hz= 144, 1KHz = 71 
+// TIM_TimeBaseStructure.TIM_Prescaler =  25;   // 200Hz=326, 500Hz= 144, 1KHz = 71, 2KHz = 35, 2.76KHz = 25
+   TIM_TimeBaseStructure.TIM_ClockDivision = 0;
+   TIM_TimeBaseStructure.TIM_RepetitionCounter = 0;   // 주의 타이머 1번은 반드시 초기화 해야됨..그렇지 않으면 DUTY조절이 쓰레기 값으로 됨.
+   TIM_TimeBaseStructure.TIM_CounterMode = TIM_CounterMode_Up;
+
+   TIM_TimeBaseInit(TIM3, &TIM_TimeBaseStructure);
+ 
+   TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM2;              // LAMP LIGHT CH1
+   TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
+   TIM_OCInitStructure.TIM_OutputNState = TIM_OutputNState_Enable;
+   TIM_OCInitStructure.TIM_Pulse = 1000;
+   TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_Low;
+   TIM_OCInitStructure.TIM_OCNPolarity = TIM_OCNPolarity_Low;
+   TIM_OCInitStructure.TIM_OCIdleState = TIM_OCIdleState_Set;
+   TIM_OCInitStructure.TIM_OCNIdleState = TIM_OCIdleState_Reset;
+   TIM_OC1Init(TIM3, &TIM_OCInitStructure);
+//   TIM_DMACmd(TIM3, TIM_DMA_CC3, ENABLE);  // TIM3 Update DMA Request enable 
+
+   TIM_OCInitStructure.TIM_OCMode = TIM_OCMode_PWM2;            //  BACK LIGHT CH2
+   TIM_OCInitStructure.TIM_OutputState = TIM_OutputState_Enable;
+   TIM_OCInitStructure.TIM_OutputNState = TIM_OutputNState_Enable;
+   TIM_OCInitStructure.TIM_Pulse = 900;
+   TIM_OCInitStructure.TIM_OCPolarity = TIM_OCPolarity_Low;
+   TIM_OCInitStructure.TIM_OCNPolarity = TIM_OCNPolarity_Low;
+   TIM_OCInitStructure.TIM_OCIdleState = TIM_OCIdleState_Set;
+   TIM_OCInitStructure.TIM_OCNIdleState = TIM_OCIdleState_Reset;
+   TIM_OC2Init(TIM3, &TIM_OCInitStructure);
+
+//  TIM_DMACmd(TIM3, TIM_DMA_CC4, ENABLE);  // TIM3 Update DMA Request enable 
+
+   TIM_Cmd(TIM3, ENABLE); //TIM3 enable counter
+   TIM_ARRPreloadConfig(TIM3, ENABLE);
+
+}
+
+
+//----------------------------------------------------
+// EXTI_Configuration(void) 외부 인터럽트 초기화 루틴..
+// 주의 사용시  NVIC_initial(void) 인터럽트 설정 루틴 추가 할 것..
+//
+
+void EXTI_Configuration(void)
+{
+   EXTI_InitTypeDef EXTI_InitStructure;
+
+//
+// 포트 정의..
+//
+   /* Enable GPIOB clock */
+    RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB | RCC_APB2Periph_AFIO, ENABLE);
+    // Configure PB 15 INPUT
+    GPIO_InitStructure.GPIO_Pin = 0;
+    GPIO_InitStructure.GPIO_Pin =   GPIO_Pin_15;
+    GPIO_InitStructure.GPIO_Mode =  GPIO_Mode_IPU;
+    GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+    GPIO_Init(GPIOB, &GPIO_InitStructure);
+//
+// 인터럽트 포트, 핀 정의..
+//
+   GPIO_EXTILineConfig(GPIO_PortSourceGPIOB, GPIO_PinSource15);
+//
+// 인터럽트 소스 정의..
+//
+   EXTI_InitStructure.EXTI_Line = EXTI_Line15;
+   EXTI_InitStructure.EXTI_Mode = EXTI_Mode_Interrupt;
+   EXTI_InitStructure.EXTI_Trigger = EXTI_Trigger_Falling;
+   //EXTI_InitStructure.EXTI_Trigger = EXTI_Trigger_Rising;
+   //EXTI_InitStructure.EXTI_Trigger = EXTI_Trigger_Rising_Falling;
+   EXTI_InitStructure.EXTI_LineCmd = ENABLE;
+   EXTI_Init(&EXTI_InitStructure);
+}
+
+/******************************************************************************************************/
+/* M24LC02_initial   :                                      */                                    
+/******************************************************************************************************/
+
+void M24LC02_initial(void)
+{
+
+  u32 i;
+  I2C_Cmd(I2C1, DISABLE);
+  I2C_DeInit(I2C1);
+  
+  
+/* Enable GPIOB clock */
+ /* Enable GPIOB clock */
+  RCC_APB1PeriphClockCmd(RCC_APB1Periph_I2C1, ENABLE);
+  RCC_APB2PeriphClockCmd(RCC_APB2Periph_GPIOB, ENABLE);
+
+  GPIOB->ODR &=  ~BIT_7;
+  GPIOB->ODR &=  ~BIT_6;  
+
+  /* Configure I2C1 pins: SCL and SDA */
+  GPIO_InitStructure.GPIO_Pin   =  GPIO_Pin_6 | GPIO_Pin_7;
+  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+  GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_Out_OD;
+  GPIO_Init(GPIOB, &GPIO_InitStructure);
+    
+  GPIOB->ODR |= BIT_7;
+  GPIOB->ODR |= BIT_6;
+  do{
+    i = (GPIOB->IDR & BIT_7);
+  }while(i == 0);
+  
+  do{
+    i = (GPIOB->IDR & BIT_6);
+  }while(i == 0);
+  
+  
+  GPIO_InitStructure.GPIO_Pin   =  GPIO_Pin_7;
+  GPIO_Init(GPIOB, &GPIO_InitStructure);
+  GPIOB->ODR &=  ~BIT_7;        while((GPIOB->IDR & BIT_7) == 1);
+  
+  GPIO_InitStructure.GPIO_Pin   =  GPIO_Pin_6;
+  GPIO_Init(GPIOB, &GPIO_InitStructure);
+  GPIOB->ODR &=  ~BIT_6;        while((GPIOB->IDR & BIT_6) == 1);
+  
+  GPIO_InitStructure.GPIO_Pin   =  GPIO_Pin_7;
+  GPIO_Init(GPIOB, &GPIO_InitStructure);
+  GPIOB->ODR |=  BIT_7;        while((GPIOB->IDR & BIT_7) == 0);
+  
+  GPIO_InitStructure.GPIO_Pin   =  GPIO_Pin_6;
+  GPIO_Init(GPIOB, &GPIO_InitStructure);
+  GPIOB->ODR |=  BIT_6;        while((GPIOB->IDR & BIT_6) == 0);
+  
+  /* Configure I2C1 pins: SCL and SDA */
+  GPIO_InitStructure.GPIO_Pin   =  GPIO_Pin_6 | GPIO_Pin_7;
+  GPIO_InitStructure.GPIO_Speed = GPIO_Speed_50MHz;
+  GPIO_InitStructure.GPIO_Mode  = GPIO_Mode_AF_OD;
+  GPIO_Init(GPIOB, &GPIO_InitStructure);
+  
+  I2C_SoftwareResetCmd(I2C1, ENABLE);
+  I2C_SoftwareResetCmd(I2C1, DISABLE);
+ 
+  I2C_Cmd(I2C1, ENABLE);
+  
+  //I2C_DeInit(I2C1);
+  /* I2C configuration */
+  I2C_InitStructure.I2C_Mode                = I2C_Mode_I2C;
+  I2C_InitStructure.I2C_DutyCycle           = I2C_DutyCycle_2;
+  I2C_InitStructure.I2C_OwnAddress1         = 0x00;
+  I2C_InitStructure.I2C_Ack                 = I2C_Ack_Enable;
+  I2C_InitStructure.I2C_AcknowledgedAddress = I2C_AcknowledgedAddress_7bit;
+  I2C_InitStructure.I2C_ClockSpeed          = 100000;      // 200kHz 2011.01.19.수정함.
+
+  /* I2C Peripheral Enable */
+  
+  /* Apply I2C configuration after enabling it */
+  I2C_Init(I2C1, &I2C_InitStructure);
+  
+  I2C_Cmd(I2C1, ENABLE);
+}
+
+
+//
+// Watch Dog ...
+//
+void  WATCHDOG_initial()
+{
+  
+    /* Check if the system has resumed from IWDG reset */
+  
+#if 0  
+    if (RCC_GetFlagStatus(RCC_FLAG_IWDGRST) != RESET)
+    {
+        printf("IWDGRST flag set ...\n");
+
+        /* IWDGRST flag set
+           Turn on Red 
+           Clear reset flags */
+        RCC_ClearFlag();
+    }
+    else
+    {
+        printf("IWDGRST flag is not set ...\n");
+
+        /* IWDGRST flag is not set */
+        /* Turn off Red */
+    }
+#endif
+    
+    /* IWDG timeout equal to 280 ms (the timeout may varies due to LSI frequency
+    dispersion) */
+    /* Enable write access to IWDG_PR and IWDG_RLR registers */
+    IWDG_WriteAccessCmd(IWDG_WriteAccess_Enable);
+
+    /* IWDG counter clock: 40KHz(LSI) / 32 = 1.25 KHz */
+    IWDG_SetPrescaler(IWDG_Prescaler_32);
+
+    /* Set counter reload value to 349 */
+    IWDG_SetReload(349); // 349 = 0x15D
+
+    /* Reload IWDG counter */
+    IWDG_ReloadCounter();
+
+    /* Enable IWDG (the LSI oscillator will be enabled by hardware) */
+    IWDG_Enable();
+  
+  /*
+   if (RCC->CSR & (1<<29)) {                       // IWDG Reset Flag set
+    RCC->CSR |= (1<<24);                          // Clear Reset Flags
+    }
+ 
+  for (i = 0; i < 10; i++) {
+    Delay(1000000);                               // wait less than watchdog interval
+    IWDG->KR  = 0xAAAA;                           // reload the watchdog
+*/
+}
+
+/******************************************************************************************************/
+/* CORTEX_initial   :                                      */                                    
+/******************************************************************************************************/
+void CORTEX_initial(void) {
+  PLL_initial();        // PLL Initial
+  NVIC_initial();                 // vector initial
+
+  GPIO_port_initial();        // gpio initial
+  //WATCH_DOG();     
+  CAN0_Init();        // CAN0초기화..
+
+  WATCH_DOG();  SYSTICK_initial();  // system tick Initial   
+//WATCH_DOG();  UART1_initial();   // uart 1 initial
+//WATCH_DOG();  UART2_initial();   // uart 2 initial
+//WATCH_DOG();  UART3_initial();   // uart 3 initial
+//WATCH_DOG();  EXTI_Configuration(); //Exit  initial
+
+  //WATCH_DOG();  M24LC02_initial(); // 24lc02 initial
+
+//DMA_Configuration();                // dma initial
+//WATCH_DOG();  ADC1_Configuration();  // adc initial
+WATCH_DOG();  ADC2_Configuration();  // adc initial
+//WATCH_DOG();  ADC_SoftwareStartConvCmd(ADC1, ENABLE); // DMA ADC 컨버터 시작..
+//WATCH_DOG();     TIM3_Configuration();
+WATCH_DOG();     Gp_initial();
+
+}
+/************************************** COPYRIGHT 2011 (주)기원전자 기술연구소*************************************/
+

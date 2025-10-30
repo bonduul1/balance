@@ -1,0 +1,76 @@
+[Stack]
+FillEnabled=0
+OverflowWarningsEnabled=1
+WarningThreshold=90
+SpWarningsEnabled=1
+WarnLogOnly=1
+UseTrigger=1
+TriggerName=main
+LimitSize=0
+ByteLimit=50
+[Exceptions]
+StopOnUncaught=_ 0
+StopOnThrow=_ 0
+[DebugChecksum]
+Checksum=1393601903
+[CallStack]
+ShowArgs=0
+[Disassembly]
+MixedMode=1
+[InterruptLog]
+LogEnabled=0
+SumEnabled=0
+GraphEnabled=0
+ShowTimeLog=1
+ShowTimeSum=1
+SumSortOrder=0
+[Interrupts]
+Enabled=1
+[MemoryMap]
+Enabled=0
+Base=0
+UseAuto=0
+TypeViolation=1
+UnspecRange=1
+ActionState=1
+[Trace1]
+Enabled=0
+ShowSource=1
+[watch_formats]
+Fmt0={W}0:LED_DATA	4	0
+Fmt1={W}0:Out_Data	4	0
+Fmt2={W}0:T_OVER	3	0
+[TermIOLog]
+LoggingEnabled=_ 0
+LogFile=_ ""
+[CallStackLog]
+Enabled=0
+[DriverProfiling]
+Enabled=0
+Mode=0
+Graph=0
+Symbiont=0
+Exclusions=
+[Log file]
+LoggingEnabled=_ 0
+LogFile=_ ""
+Category=_ 0
+[Disassemble mode]
+mode=0
+[Breakpoints2]
+Count=0
+[Aliases]
+A0=_ "D:\PRG\TONGYANG\IYANGI\8Á¶ÀÌ¾Ó±â\ÆÇ³Ú\20121205\main.c" ""
+A1=_ "D:\PRG\TONGYANG\TRACTOR\1786-648-2300_TX704_½ºÀ§Ä¡ÆÇ³ÚÁ¶ÇÕ\20160106\iexec.c" ""
+A2=_ "D:\PRG\TONGYANG\TRACTOR\1786-648-2300_TX704_½ºÀ§Ä¡ÆÇ³ÚÁ¶ÇÕ\20160106\main.c" ""
+A3=_ "D:\PRG\TONGYANG\TRACTOR\1786-648-2300_TX704_½ºÀ§Ä¡ÆÇ³ÚÁ¶ÇÕ\20160106\stm32f10x_init.c" ""
+A4=_ "D:\PRG\TONGYANG\TRACTOR\1786-648-2300_TX704_½ºÀ§Ä¡ÆÇ³ÚÁ¶ÇÕ\20160106\stm32f10x_it.c" ""
+A5=_ "D:\PRG\TONGYANG\TRACTOR\1872-648-2500_TX704_½ºÀ§Ä¡¹Ú½ºASSY\Firmware_LIB\module\stm32f10x_adc.c" ""
+A6=_ "D:\PRG\TONGYANG\TRACTOR\1872-648-2500_TX704_½ºÀ§Ä¡¹Ú½ºASSY\Firmware_LIB\module\stm32f10x_iwdg.c" ""
+A7=_ "E:\PRG\TONGYANG\IYANGI\8Á¶ÀÌ¾Ó±â\ÆÇ³Ú\20121205\CAN_APP.C" ""
+A8=_ "E:\PRG\TONGYANG\IYANGI\8Á¶ÀÌ¾Ó±â\ÆÇ³Ú\Firmware_LIB\module\stm32f10x_adc.c" ""
+A9=_ "E:\PRG\TONGYANG\IYANGI\8Á¶ÀÌ¾Ó±â\ÆÇ³Ú\Firmware_LIB\module\stm32f10x_can.c" ""
+A10=_ "E:\PRG\TONGYANG\IYANGI\8Á¶ÀÌ¾Ó±â\ÆÇ³Ú\Firmware_LIB\module\stm32f10x_nvic.c" "D:\PRG\LS_MTRON\Æ®·¢ÅÍ\CONTROLLER_SPL_NEW\Firmware_LIB\module\stm32f10x_nvic.c"
+A11=_ "E:\PRG\TONGYANG\IYANGI\8Á¶ÀÌ¾Ó±â\ÆÇ³Ú\Firmware_LIB\module\stm32f10x_usart.c" ""
+Count=12
+SuppressDialog=0
